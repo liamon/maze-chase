@@ -6,7 +6,7 @@ import javax.swing.*;
 import java.awt.image.*;
 import java.io.*;
 
-public class AStarMaze extends JFrame implements Runnable, MouseListener, MouseMotionListener, KeyListener {
+public class AStarMaze extends JFrame implements Runnable {
 
 	// member data
 	private boolean isInitialised = false;
@@ -21,6 +21,10 @@ public class AStarMaze extends JFrame implements Runnable, MouseListener, MouseM
 	
 	private String imageFilePath = System.getProperty("user.dir") + File.separator + "img" + File.separator;
 	private String saveFilePath = System.getProperty("user.dir") + File.separator + "save" + File.separator;
+
+	// mouse position on previous mouseDragged event
+	// must be member variables for lifetime reasons
+	private int prevx = -1, prevy = -1; 
 	
 	// constructor
 	public AStarMaze () {
@@ -50,10 +54,89 @@ public class AStarMaze extends JFrame implements Runnable, MouseListener, MouseM
 		strategy = getBufferStrategy();
 		offscreenBuffer = strategy.getDrawGraphics();
 		
+		// Since uploading this to GitHub, I changed these three methods from
+		// being passed "this", which implemented the required Listener interfaces,
+		// to passing them anonymous inner classes which inherit Adapters.
+		//
 		// register the Jframe itself to receive mouse and keyboard events
-		addMouseListener(this);
-		addMouseMotionListener(this);
-		addKeyListener(this);
+		addMouseListener(new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent e) {
+				if (!isGameRunning) {
+					int x = e.getX();
+					int y = e.getY();
+					if (isStartClicked(x, y)) {
+						isGameRunning = true;
+						badguy.reCalcPath(map, player.x, player.y);
+						return;
+					}
+					if (isLoadClicked(x, y)) {
+						loadMaze();
+						return;
+					}
+					if (isSaveClicked(x, y)) {
+						saveMaze();
+						return;
+					}
+				}
+				
+				// determine which cell of the gameState array was clicked on
+				int x = e.getX() / 20;
+				int y = e.getY() / 20;
+				// toggle the state of the cell
+				map[x][y] = !map[x][y];
+				// throw an extra repaint, to get immediate visual feedback
+				this.repaint();
+				// store mouse position so that each tiny drag doesn't toggle the cell
+				// (see mouseDragged method below)
+				prevx = x;
+				prevy = y;
+			}
+		});
+
+		addMouseMotionListener(new MouseMotionAdapter() {
+			@Override
+			public void mouseDragged(MouseEvent e) {
+				// determine which cell of the gameState array was clicked on
+				// and make sure it has changed since the last mouseDragged event
+				int x = e.getX() / 20;
+				int y = e.getY() / 20;
+				if (x != prevx || y != prevy) {
+					// toggle the state of the cell
+					map[x][y] = !map[x][y];
+					// throw an extra repaint, to get immediate visual feedback
+					this.repaint();
+					// store mouse position so that each tiny drag doesn't toggle the cell
+					prevx = x;
+					prevy = y;
+				}
+			}
+		});
+
+		addKeyListener(new KeyAdapter() {
+			@Override
+			public void keyPressed(KeyEvent e) {
+				if (e.getKeyCode() == KeyEvent.VK_LEFT) {
+					player.setXSpeed(-1);
+				} else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
+					 player.setXSpeed(1);
+				} else if (e.getKeyCode() == KeyEvent.VK_UP) {
+					 player.setYSpeed(-1);
+				} else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+					player.setYSpeed(1);
+				}
+				badguy.reCalcPath(map, player.x, player.y);
+			}
+			
+			@Override
+			public void keyReleased(KeyEvent e) { 
+				if (e.getKeyCode() == KeyEvent.VK_LEFT || e.getKeyCode() == KeyEvent.VK_RIGHT) {
+					player.setXSpeed(0);
+				} else if (e.getKeyCode() == KeyEvent.VK_UP || e.getKeyCode() == KeyEvent.VK_DOWN) {
+					player.setYSpeed(0);
+				}
+			}
+		});
 		
 		// initialise the map state
 		for (x = 0; x < 40; x++) {
@@ -141,39 +224,6 @@ public class AStarMaze extends JFrame implements Runnable, MouseListener, MouseM
 		catch (IOException e) {}		
 	}
 	
-	// mouse events which must be implemented for MouseListener
-	public void mousePressed(MouseEvent e) {
-		if (!isGameRunning) {
-			int x = e.getX();
-			int y = e.getY();
-			if (isStartClicked(x, y)) {
-				isGameRunning = true;
-				badguy.reCalcPath(map, player.x, player.y);
-				return;
-			}
-			if (isLoadClicked(x, y)) {
-				loadMaze();
-				return;
-			}
-			if (isSaveClicked(x, y)) {
-				saveMaze();
-				return;
-			}
-		}
-		
-		// determine which cell of the gameState array was clicked on
-		int x = e.getX() / 20;
-		int y = e.getY() / 20;
-		// toggle the state of the cell
-		map[x][y] = !map[x][y];
-		// throw an extra repaint, to get immediate visual feedback
-		this.repaint();
-		// store mouse position so that each tiny drag doesn't toggle the cell
-		// (see mouseDragged method below)
-		prevx = x;
-		prevy = y;
-	}
-	
 	private boolean isStartClicked(int x, int y) {
 		return x >= 15 && x <= 85 && y >= 40 && y <= 70;
 	}
@@ -185,58 +235,9 @@ public class AStarMaze extends JFrame implements Runnable, MouseListener, MouseM
 	private boolean isSaveClicked(int x, int y) {
 		return x >= 415 && x <= 485 && y >= 40 && y <= 70;
 	}
-	
-	public void mouseReleased(MouseEvent e) {}
-
-	public void mouseEntered(MouseEvent e) {}
-
-	public void mouseExited(MouseEvent e) {}
-
-	public void mouseClicked(MouseEvent e) {}
-	
-	// mouse events which must be implemented for MouseMotionListener
-	public void mouseMoved(MouseEvent e) {}
-
-	// mouse position on previous mouseDragged event
-	// must be member variables for lifetime reasons
-	int prevx = -1, prevy = -1; 
-	public void mouseDragged(MouseEvent e) {
-		// determine which cell of the gameState array was clicked on
-		// and make sure it has changed since the last mouseDragged event
-		int x = e.getX() / 20;
-		int y = e.getY() / 20;
-		if (x != prevx || y != prevy) {
-			// toggle the state of the cell
-			map[x][y] = !map[x][y];
-			// throw an extra repaint, to get immediate visual feedback
-			this.repaint();
-			// store mouse position so that each tiny drag doesn't toggle the cell
-			prevx = x;
-			prevy = y;
-		}
-	}
 
 	// Keyboard events
-	public void keyPressed(KeyEvent e) {
-		if (e.getKeyCode() == KeyEvent.VK_LEFT) {
-			player.setXSpeed(-1);
-		} else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
-			 player.setXSpeed(1);
-		} else if (e.getKeyCode() == KeyEvent.VK_UP) {
-			 player.setYSpeed(-1);
-		} else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
-			player.setYSpeed(1);
-		}
-		badguy.reCalcPath(map, player.x, player.y);
-	}
 	
-	public void keyReleased(KeyEvent e) { 
-		if (e.getKeyCode() == KeyEvent.VK_LEFT || e.getKeyCode() == KeyEvent.VK_RIGHT) {
-			player.setXSpeed(0);
-		} else if (e.getKeyCode() == KeyEvent.VK_UP || e.getKeyCode() == KeyEvent.VK_DOWN) {
-			player.setYSpeed(0);
-		}
-	}
 	
 	public void keyTyped(KeyEvent e) { }
 	
